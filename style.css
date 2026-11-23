@@ -121,3 +121,27 @@ form button { background: var(--ink); color: var(--panel); font-weight: 700; cur
 @media (prefers-reduced-motion: no-preference) {
   .dots i { transition: background .2s, border-color .2s; }
 }
+
+/* ---- v2: login, categories ---- */
+[hidden] { display: none !important; }
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 8px; }
+.top .who { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .9rem; }
+.top .who button { font: inherit; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 10px; padding: 6px 12px; cursor: pointer; }
+
+.auth { max-width: 420px; margin: 0 auto; }
+.auth form { grid-template-columns: 1fr; margin-top: 14px; }
+.auth .row { display: flex; gap: 8px; }
+.auth .row button { flex: 1; font: inherit; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-weight: 700; border: 1px solid var(--ink); background: var(--ink); color: var(--panel); }
+.auth .row button.alt { background: transparent; color: var(--ink); }
+
+form.add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+form.add input[type="text"] { grid-column: 1 / -1; }
+select { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); }
+select option { background: var(--panel); color: var(--ink); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; }
+.chip { font: inherit; font-size: .85rem; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.chip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+.list .cat { width: 10px; height: 10px; border-radius: 50%; flex: none; }

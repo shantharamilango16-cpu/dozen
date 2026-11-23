@@ -1,19 +1,22 @@
-const MAX = 12;
-const KEY = "dozen.tasks.v1";
+// 1) Paste your two values from Supabase (Project Settings -> API)
+const SUPABASE_URL = "https://amdagpndkhpbfruocljg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_lOyPMmNw_rQl5KQnK7iztA_HDkgkWC8";
 
-let tasks = load();
+const MAX = 12;
+const CATS = { Work: "#4c6ef5", Home: "#f2b705", Study: "#9c5fd6", Personal: "#3f8f6b" };
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = (id) => document.getElementById(id);
+
+let tasks = [];
+let user = null;
+let filter = "All";
+let channel = null;
 let today = new Date();
 let view = new Date(today.getFullYear(), today.getMonth(), 1);
 let selected = iso(today);
+const notified = new Set();
 
-const $ = (id) => document.getElementById(id);
-
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
-}
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch {}
-}
 function iso(d) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -21,13 +24,60 @@ function iso(d) {
 }
 const forDay = (date) => tasks.filter((t) => t.date === date);
 
+/* ---------- auth ---------- */
+async function credentials(e) {
+  e && e.preventDefault();
+  return { email: $("aEmail").value.trim(), password: $("aPass").value };
+}
+$("authForm").addEventListener("submit", async (e) => {
+  const { error } = await db.auth.signInWithPassword(await credentials(e));
+  $("authMsg").textContent = error ? "Could not sign in: " + error.message : "";
+});
+$("signup").onclick = async () => {
+  const { data, error } = await db.auth.signUp(await credentials());
+  if (error) $("authMsg").textContent = "Could not create account: " + error.message;
+  else if (!data.session) $("authMsg").textContent = "Account created. Check your email to confirm, then sign in.";
+};
+$("signout").onclick = () => db.auth.signOut();
+
+db.auth.onAuthStateChange((_event, session) => {
+  user = session ? session.user : null;
+  $("auth").hidden = !!user;
+  $("app").hidden = !user;
+  $("who").hidden = !user;
+  if (user) {
+    $("email").textContent = user.email;
+    startSync();
+  } else {
+    tasks = [];
+    if (channel) { db.removeChannel(channel); channel = null; }
+  }
+});
+
+/* ---------- data ---------- */
+async function loadTasks() {
+  const { data, error } = await db.from("tasks").select("*").order("created_at");
+  if (error) { $("msg").textContent = "Could not load tasks: " + error.message; return; }
+  tasks = data;
+  render();
+}
+function startSync() {
+  loadTasks();
+  if (channel) return;
+  // live updates when another device changes something
+  channel = db.channel("tasks-sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, loadTasks)
+    .subscribe();
+}
+document.addEventListener("visibilitychange", () => { if (user && !document.hidden) loadTasks(); });
+
+/* ---------- render ---------- */
 function renderCalendar() {
   $("monthLabel").textContent = view.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const grid = $("grid");
   grid.innerHTML = "";
   const first = view.getDay();
   const days = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
-
   for (let i = 0; i < first; i++) {
     const b = document.createElement("button");
     b.className = "cell blank";
@@ -41,23 +91,40 @@ function renderCalendar() {
     const b = document.createElement("button");
     b.className = "cell" + (date === iso(today) ? " today" : "") + (date === selected ? " sel" : "");
     b.innerHTML = `<span>${d}</span><span class="pip">${
-      list.slice(0, 4).map(() => `<i class="${allDone ? "all" : ""}"></i>`).join("")
-    }</span>`;
+      list.slice(0, 4).map(() => `<i class="${allDone ? "all" : ""}"></i>`).join("")}</span>`;
     b.setAttribute("aria-label", `${date}, ${list.length} tasks`);
     b.onclick = () => { selected = date; render(); };
     grid.appendChild(b);
   }
 }
 
+function renderChips() {
+  const box = $("chips");
+  box.innerHTML = "";
+  ["All", ...Object.keys(CATS)].forEach((name) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.setAttribute("aria-pressed", String(filter === name));
+    b.innerHTML = (CATS[name] ? `<i style="background:${CATS[name]}"></i>` : "") + name;
+    b.onclick = () => { filter = name; renderDay(); };
+    box.appendChild(b);
+  });
+}
+
 function renderDay() {
   const d = new Date(selected + "T00:00:00");
   $("dayLabel").textContent = d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-  const list = forDay(selected).sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
+  const all = forDay(selected);
+  const list = all
+    .filter((t) => filter === "All" || t.category === filter)
+    .sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"));
 
-  const doneCount = list.filter((t) => t.done).length;
+  const doneCount = all.filter((t) => t.done).length;
   $("dots").innerHTML = Array.from({ length: MAX }, (_, i) =>
-    `<i class="${i < doneCount ? "done" : i < list.length ? "used" : ""}"></i>`).join("");
-  $("count").textContent = `${doneCount} done · ${list.length} of ${MAX} planned`;
+    `<i class="${i < doneCount ? "done" : i < all.length ? "used" : ""}"></i>`).join("");
+  $("count").textContent = `${doneCount} done · ${all.length} of ${MAX} planned`;
+  renderChips();
 
   const ul = $("list");
   ul.innerHTML = "";
@@ -65,19 +132,28 @@ function renderDay() {
     const li = document.createElement("li");
     if (t.done) li.className = "done";
     li.innerHTML = `<input type="checkbox" ${t.done ? "checked" : ""} aria-label="Mark done">
+      <span class="cat" title="${t.category}" style="background:${CATS[t.category] || "#999"}"></span>
       <span class="t"></span><span class="when">${t.time || ""}</span>
       <button aria-label="Delete task">&times;</button>`;
-    li.querySelector(".t").textContent = t.text; // textContent keeps user input safe
-    li.querySelector("input").onchange = () => { t.done = !t.done; save(); render(); };
-    li.querySelector("button").onclick = () => { tasks = tasks.filter((x) => x.id !== t.id); save(); render(); };
+    li.querySelector(".t").textContent = t.text;
+    li.querySelector("input").onchange = async () => {
+      await db.from("tasks").update({ done: !t.done }).eq("id", t.id);
+      loadTasks();
+    };
+    li.querySelector("button").onclick = async () => {
+      await db.from("tasks").delete().eq("id", t.id);
+      loadTasks();
+    };
     ul.appendChild(li);
   });
   $("empty").hidden = list.length > 0;
 }
-
 function render() { renderCalendar(); renderDay(); }
 
-$("form").addEventListener("submit", (e) => {
+/* ---------- add task ---------- */
+$("cat").innerHTML = Object.keys(CATS).map((c) => `<option>${c}</option>`).join("");
+
+$("form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("text").value.trim();
   if (!text) return;
@@ -86,16 +162,19 @@ $("form").addEventListener("submit", (e) => {
     return;
   }
   $("msg").textContent = "";
-  tasks.push({ id: Date.now(), text, date: selected, time: $("time").value, done: false, notified: false });
-  save();
-  if (tasks.some((t) => t.time) && "Notification" in window && Notification.permission === "default") {
+  const { error } = await db.from("tasks").insert({
+    text, date: selected, time: $("time").value || null, category: $("cat").value,
+  });
+  if (error) { $("msg").textContent = "Could not save: " + error.message; return; }
+  if ($("time").value && "Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
   $("text").value = "";
   $("time").value = "";
-  render();
+  loadTasks();
 });
 
+/* ---------- calendar nav ---------- */
 $("prev").onclick = () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderCalendar(); };
 $("next").onclick = () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderCalendar(); };
 $("today").onclick = () => {
@@ -105,15 +184,15 @@ $("today").onclick = () => {
   render();
 };
 
-// Reminders: checks every 20s while the tab is open
+/* ---------- reminders (tab must be open) ---------- */
 setInterval(() => {
   const now = new Date();
   const date = iso(now);
   const hhmm = now.toTimeString().slice(0, 5);
   tasks.forEach((t) => {
-    if (!t.done && !t.notified && t.date === date && t.time && t.time <= hhmm) {
-      t.notified = true;
-      save();
+    const time = t.time ? t.time.slice(0, 5) : "";
+    if (!t.done && time && t.date === date && time <= hhmm && !notified.has(t.id)) {
+      notified.add(t.id);
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("Dozen reminder", { body: t.text });
       } else {
@@ -122,5 +201,3 @@ setInterval(() => {
     }
   });
 }, 20000);
-
-render();
