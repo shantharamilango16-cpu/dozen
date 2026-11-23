@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dozen – reminders, to-dos and calendar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Dozen</h1>
+    <p>Twelve tasks a day, no more. Pick what matters.</p>
+  </header>
+
+  <main>
+    <section class="cal" aria-label="Calendar">
+      <div class="cal-head">
+        <button id="prev" aria-label="Previous month">&lsaquo;</button>
+        <h2 id="monthLabel"></h2>
+        <button id="next" aria-label="Next month">&rsaquo;</button>
+      </div>
+      <div class="dow" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+      <div id="grid" class="grid"></div>
+      <button id="today" class="link">Jump to today</button>
+    </section>
+
+    <section class="day" aria-label="Tasks for the selected day">
+      <h2 id="dayLabel"></h2>
+      <div id="dots" class="dots" aria-label="Tasks used out of twelve"></div>
+      <p id="count" class="count"></p>
+
+      <form id="form" autocomplete="off">
+        <input id="text" type="text" placeholder="What needs doing?" maxlength="80" required>
+        <input id="time" type="time" aria-label="Reminder time">
+        <button type="submit">Add task</button>
+      </form>
+      <p id="msg" class="msg" role="status"></p>
+
+      <ul id="list" class="list"></ul>
+      <p id="empty" class="empty">Nothing planned for this day. Add your first task above.</p>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
